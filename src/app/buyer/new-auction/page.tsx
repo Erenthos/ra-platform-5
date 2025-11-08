@@ -18,19 +18,29 @@ export default function NewAuctionPage() {
   ]);
   const [loading, setLoading] = useState(false);
 
+  // ✅ Add new item row
   const addItem = () =>
-    setItems([...items, { name: "", quantity: 1, uom: "" }]);
+    setItems((prev) => [...prev, { name: "", quantity: 1, uom: "" }]);
 
+  // ✅ Update an item field (type-safe, fixes TS error)
   const updateItem = (index: number, field: keyof AuctionItem, value: string) => {
-    const updated = [...items];
-    updated[index][field] =
-      field === "quantity" ? Number(value) : (value as string);
-    setItems(updated);
+    setItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              [field]: field === "quantity" ? Number(value) : value,
+            }
+          : item
+      )
+    );
   };
 
+  // ✅ Remove item
   const removeItem = (index: number) =>
-    setItems(items.filter((_, i) => i !== index));
+    setItems((prev) => prev.filter((_, i) => i !== index));
 
+  // ✅ Submit auction
   const handleSubmit = async () => {
     const buyer = JSON.parse(localStorage.getItem("buyer") || "null");
     if (!buyer?.id) {
@@ -61,7 +71,7 @@ export default function NewAuctionPage() {
 
       const data = await res.json();
       if (res.ok) {
-        alert("Auction created successfully!");
+        alert("✅ Auction created successfully!");
         window.location.href = "/buyer/dashboard";
       } else {
         alert(data.error || "Failed to create auction");
@@ -77,9 +87,12 @@ export default function NewAuctionPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white p-8">
       <div className="max-w-3xl mx-auto bg-white/10 p-8 rounded-xl shadow-lg border border-white/10">
-        <h1 className="text-3xl font-bold mb-6 text-center">Create New Auction</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center">
+          Create New Auction
+        </h1>
 
         <div className="space-y-4">
+          {/* Title */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">Title</label>
             <input
@@ -90,6 +103,7 @@ export default function NewAuctionPage() {
             />
           </div>
 
+          {/* Description */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">Description</label>
             <textarea
@@ -100,6 +114,7 @@ export default function NewAuctionPage() {
             />
           </div>
 
+          {/* Duration & Bid Decrement */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">
@@ -126,8 +141,11 @@ export default function NewAuctionPage() {
             </div>
           </div>
 
+          {/* Items */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Auction Items</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Auction Items
+            </label>
             {items.map((item, index) => (
               <div
                 key={index}
@@ -156,7 +174,7 @@ export default function NewAuctionPage() {
                 />
                 <button
                   onClick={() => removeItem(index)}
-                  className="col-span-2 text-red-400 hover:text-red-500"
+                  className="col-span-2 text-red-400 hover:text-red-500 text-sm"
                 >
                   Remove
                 </button>
@@ -170,6 +188,7 @@ export default function NewAuctionPage() {
             </button>
           </div>
 
+          {/* Footer Buttons */}
           <div className="flex justify-end mt-6 gap-3">
             <button
               onClick={() => (window.location.href = "/buyer/dashboard")}
