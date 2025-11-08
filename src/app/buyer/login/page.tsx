@@ -1,53 +1,84 @@
 "use client";
 
-import AuthCard from "@/components/AuthCard";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-export default function BuyerLogin() {
+export default function BuyerLoginPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const login = async () => {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ ...form, userType: "buyer" }),
-    });
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-    if (res.ok) router.push("/buyer/dashboard");
-    else alert("Login failed");
+    try {
+      const res = await fetch("/api/buyer/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Login failed");
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Store buyer info locally for dashboard use
+      localStorage.setItem("buyer", JSON.stringify(data.buyer));
+
+      alert("Login successful!");
+      router.push("/buyer/dashboard");
+    } catch (err) {
+      console.error("Login error:", err);
+      alert("Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <AuthCard title="Buyer Login" subtitle="Manage auctions & monitor bids">
-      <div className="space-y-4">
-        <input
-          placeholder="Email"
-          className="w-full rounded-lg bg-white/20 text-white p-3"
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-        />
-        <input
-          placeholder="Password"
-          type="password"
-          className="w-full rounded-lg bg-white/20 text-white p-3"
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-        />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
+      <form
+        onSubmit={handleLogin}
+        className="bg-white/10 backdrop-blur-xl p-8 rounded-xl w-full max-w-md border border-white/10"
+      >
+        <h2 className="text-2xl font-bold mb-6 text-center">Buyer Login</h2>
+
+        <div className="mb-4">
+          <label className="block mb-1 text-sm">Email</label>
+          <input
+            type="email"
+            className="w-full p-2 rounded bg-gray-800 border border-gray-700 text-white"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="mb-6">
+          <label className="block mb-1 text-sm">Password</label>
+          <input
+            type="password"
+            className="w-full p-2 rounded bg-gray-800 border border-gray-700 text-white"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
 
         <button
-          onClick={login}
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-lg font-semibold"
+          type="submit"
+          disabled={loading}
+          className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg font-semibold"
         >
-          Login
+          {loading ? "Logging in..." : "Login"}
         </button>
-
-        <button
-          className="w-full mt-2 text-gray-300 hover:underline text-sm"
-          onClick={() => router.push("/buyer/signup")}
-        >
-          Create buyer account →
-        </button>
-      </div>
-    </AuthCard>
+      </form>
+    </div>
   );
 }
-
