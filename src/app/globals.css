@@ -1,1 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Styles */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  background: linear-gradient(to bottom right, #0f172a, #1e293b, #000);
+  color: white;
+  overflow-x: hidden;
+}
+
+/* Smooth transitions for buttons, cards, etc. */
+* {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
