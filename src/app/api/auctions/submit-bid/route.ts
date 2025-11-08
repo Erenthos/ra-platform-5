@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     if (!supplierId || !auctionId || !bids)
       return NextResponse.json({ error: "Missing data" }, { status: 400 });
 
-    // Upsert each bid
+    // 1️⃣ Save each bid
     for (const b of bids) {
       await prisma.bid.upsert({
         where: {
@@ -27,26 +27,37 @@ export async function POST(req: Request) {
       });
     }
 
-    // --- 🔢  Recalculate ranks ---
+    // 2️⃣ Calculate total bid per supplier for this auction
     const allBids = await prisma.bid.findMany({
       where: { auctionId },
       include: { supplier: true },
     });
 
     const totals: Record<string, number> = {};
-    allBids.forEach((b) => {
+    for (const b of allBids) {
       totals[b.supplierId] = (totals[b.supplierId] || 0) + b.bidValue;
-    });
+    }
 
+    // 3️⃣ Determine ranks (lowest = L1)
     const ranked = Object.entries(totals)
       .sort(([, t1], [, t2]) => t1 - t2)
-      .map(([sid], i) => ({ supplierId: sid, rank: `L${i + 1}` }));
+      .map(([sid], i) => ({
+        supplierId: sid,
+        rank: `L${i + 1}`,
+      }));
 
+    // 4️⃣ Emit live rank updates via Socket.IO
     const io = getIO();
     ranked.forEach((r) => {
-      io?.emit("rank-update", { auctionId, ...r });
+      io?.emit("rank-update", {
+        auctionId,
+        supplierId: r.supplierId,
+        rank: r.rank,
+      });
     });
-    io?.emit("auction-update"); // refresh buyer list
+
+    // Also notify buyers to refresh auction data
+    io?.emit("auction-update");
 
     return NextResponse.json({ message: "Bids saved and ranks updated." });
   } catch (err) {
