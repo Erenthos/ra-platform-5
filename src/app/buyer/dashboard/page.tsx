@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import io from "socket.io-client";
 
 export default function BuyerDashboard() {
   const [auctions, setAuctions] = useState<any[]>([]);
@@ -12,18 +13,20 @@ export default function BuyerDashboard() {
   const [bidDecrement, setBidDecrement] = useState("");
   const [items, setItems] = useState([{ name: "", quantity: "", uom: "" }]);
 
+  // 🧠 Fetch all active auctions
   const fetchAuctions = async () => {
-    const res = await fetch("/api/auctions");
-    if (res.ok) {
-      const data = await res.json();
-      setAuctions(data.auctions);
+    try {
+      const res = await fetch("/api/auctions");
+      if (res.ok) {
+        const data = await res.json();
+        setAuctions(data.auctions || []);
+      }
+    } catch (err) {
+      console.error("Error fetching auctions:", err);
     }
   };
 
-  useEffect(() => {
-    fetchAuctions();
-  }, []);
-
+  // 🧠 Create auction handler
   const handleCreateAuction = async () => {
     try {
       const buyer = JSON.parse(localStorage.getItem("buyer") || "{}");
@@ -36,7 +39,7 @@ export default function BuyerDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          buyerId: buyer.id, // ✅ Dynamically included buyerId
+          buyerId: buyer.id,
           title,
           description,
           durationMinutes,
@@ -59,46 +62,79 @@ export default function BuyerDashboard() {
     }
   };
 
+  // 🧠 Add new item input row
   const handleAddItem = () => {
     setItems([...items, { name: "", quantity: "", uom: "" }]);
   };
 
+  // 🧠 Realtime updates
+  useEffect(() => {
+    fetchAuctions();
+
+    const socket = io();
+    socket.on("auction-update", () => {
+      console.log("🔄 Auction update received — refreshing list");
+      fetchAuctions();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white p-8">
-      <h1 className="text-3xl font-bold mb-6 text-center">Buyer Dashboard</h1>
+      <h1 className="text-3xl font-bold mb-6 text-center">
+        Buyer Dashboard
+      </h1>
 
       <button
         onClick={() => setIsModalOpen(true)}
-        className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg mb-6"
+        className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg mb-6 transition font-semibold"
       >
         Create New Auction
       </button>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {auctions.map((auction) => (
-          <motion.div
-            key={auction.id}
-            className="bg-white/10 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-md"
-            whileHover={{ scale: 1.02 }}
-          >
-            <h2 className="text-xl font-semibold mb-2">{auction.title}</h2>
-            <p className="text-gray-400 text-sm mb-2">
-              Duration: {auction.durationMinutes} mins
-            </p>
-            <p className="text-gray-400 text-sm mb-2">
-              Bid Decrement: ₹{auction.bidDecrement}
-            </p>
-            <p className="text-gray-300 text-sm">
-              {auction.description || "No description provided."}
-            </p>
-          </motion.div>
-        ))}
-      </div>
+      {/* 🔹 Auction List */}
+      {auctions.length === 0 ? (
+        <p className="text-center text-gray-400">
+          No live auctions yet. Create your first one!
+        </p>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {auctions.map((auction) => (
+            <motion.div
+              key={auction.id}
+              className="bg-white/10 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-md"
+              whileHover={{ scale: 1.02 }}
+            >
+              <h2 className="text-xl font-semibold mb-2">{auction.title}</h2>
+              <p className="text-gray-400 text-sm mb-2">
+                Duration: {auction.durationMinutes} mins
+              </p>
+              <p className="text-gray-400 text-sm mb-2">
+                Bid Decrement: ₹{auction.bidDecrement}
+              </p>
+              <p className="text-gray-300 text-sm mb-2">
+                {auction.description || "No description provided."}
+              </p>
 
-      {/* Modal */}
+              <p className="text-xs text-gray-500 mt-3">
+                Created on:{" "}
+                {new Date(auction.createdAt).toLocaleString("en-IN", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* 🔹 Create Auction Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/10 p-8 rounded-xl w-full max-w-2xl">
+          <div className="bg-white/10 backdrop-blur-xl border border-white/10 p-8 rounded-xl w-full max-w-2xl shadow-2xl">
             <h2 className="text-2xl font-bold mb-4">Create New Auction</h2>
 
             <div className="mb-3">
