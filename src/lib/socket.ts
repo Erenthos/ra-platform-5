@@ -14,14 +14,22 @@ export function getIO() {
     io.on("connection", (socket) => {
       console.log(`🔌 New client connected: ${socket.id}`);
 
+      // join auction room
       socket.on("join-auction", (auctionId: string) => {
-        socket.join(auctionId);
-        console.log(`📦 Joined auction room: ${auctionId}`);
+        socket.join(`auction-${auctionId}`);
+        console.log(`📦 Socket ${socket.id} joined auction room: auction-${auctionId}`);
       });
 
       socket.on("leave-auction", (auctionId: string) => {
-        socket.leave(auctionId);
-        console.log(`🚪 Left auction room: ${auctionId}`);
+        socket.leave(`auction-${auctionId}`);
+        console.log(`🚪 Socket ${socket.id} left auction room: auction-${auctionId}`);
+      });
+
+      // register supplier so we can send private rank updates
+      socket.on("register-supplier", (supplierId: string) => {
+        if (!supplierId) return;
+        socket.join(`supplier-${supplierId}`);
+        console.log(`🔖 Socket ${socket.id} registered supplier room: supplier-${supplierId}`);
       });
 
       socket.on("disconnect", () => {
@@ -32,6 +40,3 @@ export function getIO() {
 
   return io;
 }
-
-export { io };
-
