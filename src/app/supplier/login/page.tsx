@@ -23,12 +23,13 @@ export default function SupplierLoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.error || "Login failed");
+        // show server-provided error if present
+        alert(data?.error || "Login failed");
         setLoading(false);
         return;
       }
 
-      // ✅ Save supplier info for dashboard
+      // Save supplier info for dashboard use
       localStorage.setItem("supplier", JSON.stringify(data.supplier));
 
       alert("Login successful!");
@@ -84,10 +85,7 @@ export default function SupplierLoginPage() {
 
         <p className="text-sm text-gray-400 text-center mt-4">
           Don’t have an account?{" "}
-          <a
-            href="/supplier/signup"
-            className="text-blue-400 hover:underline"
-          >
+          <a href="/supplier/signup" className="text-blue-400 hover:underline">
             Sign up
           </a>
         </p>
