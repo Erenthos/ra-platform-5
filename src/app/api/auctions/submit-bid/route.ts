@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { io } from "@/lib/socket";
+import { getIO } from "@/lib/socket";
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +17,10 @@ export async function POST(req: Request) {
               auctionItemId: b.auctionItemId,
             },
           },
-          update: { bidValue: b.bidValue },
+          update: {
+            bidValue: b.bidValue,
+            createdAt: new Date(),
+          },
           create: {
             supplierId,
             auctionId,
@@ -28,13 +31,16 @@ export async function POST(req: Request) {
       )
     );
 
-    // Emit live update to all connected users in this auction
-    io.emit(`auction-update-${auctionId}`, { auctionId });
+    // Emit live update event safely
+    const io = getIO();
+    io?.emit(`auction-update-${auctionId}`, { auctionId });
 
     return NextResponse.json({ message: "Bids submitted successfully" });
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Bid submission failed" }, { status: 500 });
+    console.error("Bid submission failed:", err);
+    return NextResponse.json(
+      { error: "Bid submission failed" },
+      { status: 500 }
+    );
   }
 }
-
