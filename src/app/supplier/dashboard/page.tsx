@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import ioClient from "socket.io-client";
+import ioClient, { Socket } from "socket.io-client";
 
 type AuctionItem = {
   id: string;
@@ -24,17 +24,23 @@ export default function SupplierDashboard() {
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [bids, setBids] = useState<Record<string, number>>({});
   const [rank, setRank] = useState<string>("--");
-  const [socket, setSocket] = useState<any>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [supplierId, setSupplierId] = useState<string | null>(null);
+  const [supplierName, setSupplierName] = useState<string>("");
 
+  // ✅ Load supplier info from localStorage
   useEffect(() => {
     const supplier = JSON.parse(localStorage.getItem("supplier") || "null");
     if (!supplier?.id) {
       alert("Please log in again.");
       window.location.href = "/supplier/login";
-    } else setSupplierId(supplier.id);
+    } else {
+      setSupplierId(supplier.id);
+      setSupplierName(supplier.name || "Supplier");
+    }
   }, []);
 
+  // ✅ Fetch all live auctions
   const fetchAuctions = async () => {
     try {
       const res = await fetch("/api/auctions");
@@ -47,6 +53,7 @@ export default function SupplierDashboard() {
     }
   };
 
+  // ✅ Socket connection + live updates
   useEffect(() => {
     fetchAuctions();
     const s = ioClient();
@@ -54,17 +61,30 @@ export default function SupplierDashboard() {
 
     s.on("connect", () => console.log("Socket connected to server"));
     s.on("auction-update", fetchAuctions);
+
     s.on("rank-update", (payload: any) => {
-      if (payload.supplierId === supplierId && selectedAuction?.id === payload.auctionId) {
+      // When backend emits rank updates, show the supplier's current rank
+      if (
+        payload.supplierId === supplierId &&
+        selectedAuction?.id === payload.auctionId
+      ) {
         setRank(payload.rank);
       }
     });
 
-    return () => s.disconnect();
+    // ✅ Clean up on component unmount
+    return () => {
+      s.disconnect();
+    };
   }, [supplierId, selectedAuction?.id]);
 
+  // ✅ Submit bid handler
   const submitBids = async () => {
-    if (!selectedAuction || !supplierId) return alert("Please select auction");
+    if (!selectedAuction || !supplierId) {
+      alert("Please select auction first.");
+      return;
+    }
+
     const bidArray = Object.entries(bids).map(([auctionItemId, bidValue]) => ({
       auctionItemId,
       bidValue: Number(bidValue),
@@ -74,22 +94,41 @@ export default function SupplierDashboard() {
       const res = await fetch("/api/auctions/submit-bid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ supplierId, auctionId: selectedAuction.id, bids: bidArray }),
+        body: JSON.stringify({
+          supplierId,
+          auctionId: selectedAuction.id,
+          bids: bidArray,
+        }),
       });
 
       const data = await res.json();
-      if (res.ok) alert("Bids submitted! Rank will update automatically.");
-      else alert(data.error || "Failed to submit bid");
+      if (res.ok) {
+        alert("✅ Bids submitted! Rank will update automatically.");
+      } else {
+        alert(data.error || "Failed to submit bids");
+      }
     } catch (err) {
       console.error(err);
       alert("Error submitting bid");
     }
   };
 
+  // ✅ Logout
+  const logout = () => {
+    localStorage.removeItem("supplier");
+    window.location.href = "/supplier/login";
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white p-8">
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Supplier Dashboard</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Supplier Dashboard</h1>
+          <p className="text-gray-400 text-sm">
+            Welcome, <span className="text-blue-400 font-semibold">{supplierName}</span>
+          </p>
+        </div>
         <div className="text-right">
           <p className="text-sm text-gray-400">Your Rank</p>
           <p
@@ -99,9 +138,16 @@ export default function SupplierDashboard() {
           >
             {rank}
           </p>
+          <button
+            onClick={logout}
+            className="mt-2 bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
+          >
+            Logout
+          </button>
         </div>
       </div>
 
+      {/* BODY */}
       {!selectedAuction ? (
         <div className="grid md:grid-cols-2 gap-6">
           {auctions.length === 0 ? (
@@ -134,7 +180,7 @@ export default function SupplierDashboard() {
               }}
               className="bg-gray-700 px-4 py-1 rounded-lg text-sm"
             >
-              Back
+              ← Back
             </button>
           </div>
 
@@ -144,7 +190,7 @@ export default function SupplierDashboard() {
                 <th className="p-2 text-left">Item</th>
                 <th className="p-2 text-center">Qty</th>
                 <th className="p-2 text-center">UOM</th>
-                <th className="p-2 text-right">Bid (₹)</th>
+                <th className="p-2 text-right">Your Bid (₹)</th>
               </tr>
             </thead>
             <tbody>
@@ -159,7 +205,10 @@ export default function SupplierDashboard() {
                       className="bg-gray-900 border border-gray-700 text-right rounded p-2 w-28"
                       value={String(bids[it.id] ?? "")}
                       onChange={(e) =>
-                        setBids((prev) => ({ ...prev, [it.id]: e.target.value }))
+                        setBids((prev) => ({
+                          ...prev,
+                          [it.id]: Number(e.target.value),
+                        }))
                       }
                     />
                   </td>
@@ -168,7 +217,17 @@ export default function SupplierDashboard() {
             </tbody>
           </table>
 
-          <div className="flex justify-end mt-4">
+          <div className="flex justify-end mt-4 gap-3">
+            <button
+              onClick={() => {
+                setSelectedAuction(null);
+                setRank("--");
+              }}
+              className="bg-gray-700 px-4 py-2 rounded-lg"
+            >
+              Cancel
+            </button>
+
             <button
               onClick={submitBids}
               className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg"
