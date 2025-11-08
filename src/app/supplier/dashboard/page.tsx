@@ -16,6 +16,7 @@ type Auction = {
   title: string;
   description?: string;
   endsAt: string;
+  isActive: boolean;
   items: AuctionItem[];
 };
 
@@ -40,20 +41,24 @@ export default function SupplierDashboard() {
     }
   }, []);
 
-  // ✅ Fetch all live auctions
+  // ✅ Fetch all auctions (we’ll filter active ones)
   const fetchAuctions = async () => {
     try {
       const res = await fetch("/api/auctions");
       if (res.ok) {
         const data = await res.json();
-        setAuctions(data.auctions || []);
+        // Only show live auctions to suppliers
+        const activeOnly = (data.auctions || []).filter(
+          (a: Auction) => a.isActive
+        );
+        setAuctions(activeOnly);
       }
     } catch (err) {
       console.error("Error fetching auctions:", err);
     }
   };
 
-  // ✅ Socket connection + live updates
+  // ✅ Setup socket for live updates
   useEffect(() => {
     fetchAuctions();
     const s = ioClient();
@@ -63,7 +68,6 @@ export default function SupplierDashboard() {
     s.on("auction-update", fetchAuctions);
 
     s.on("rank-update", (payload: any) => {
-      // When backend emits rank updates, show the supplier's current rank
       if (
         payload.supplierId === supplierId &&
         selectedAuction?.id === payload.auctionId
@@ -72,7 +76,7 @@ export default function SupplierDashboard() {
       }
     });
 
-    // ✅ Clean up on component unmount
+    // ✅ Proper cleanup
     return () => {
       s.disconnect();
     };
@@ -126,7 +130,8 @@ export default function SupplierDashboard() {
         <div>
           <h1 className="text-3xl font-bold">Supplier Dashboard</h1>
           <p className="text-gray-400 text-sm">
-            Welcome, <span className="text-blue-400 font-semibold">{supplierName}</span>
+            Welcome,{" "}
+            <span className="text-blue-400 font-semibold">{supplierName}</span>
           </p>
         </div>
         <div className="text-right">
@@ -151,7 +156,9 @@ export default function SupplierDashboard() {
       {!selectedAuction ? (
         <div className="grid md:grid-cols-2 gap-6">
           {auctions.length === 0 ? (
-            <p className="text-gray-400">No live auctions available.</p>
+            <p className="text-gray-400">
+              No live auctions available at the moment.
+            </p>
           ) : (
             auctions.map((a) => (
               <motion.div
