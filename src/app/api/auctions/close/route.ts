@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { io } from "@/lib/socket";
+import { getIO } from "@/lib/socket";
 
 export async function POST(req: Request) {
   try {
@@ -11,12 +11,19 @@ export async function POST(req: Request) {
       data: { isActive: false, closedManually: true },
     });
 
-    io.emit(`auction-closed-${auctionId}`, { auctionId });
+    // Safely get Socket.IO instance and emit event
+    const io = getIO();
+    io?.emit(`auction-closed-${auctionId}`, { auctionId });
 
-    return NextResponse.json({ message: "Auction closed successfully", auction });
+    return NextResponse.json({
+      message: "Auction closed successfully",
+      auction,
+    });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Failed to close auction" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to close auction" },
+      { status: 500 }
+    );
   }
 }
-
