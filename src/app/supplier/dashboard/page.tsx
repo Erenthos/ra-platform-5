@@ -55,6 +55,24 @@ export default function SupplierDashboard() {
     }
   };
 
+  // ✅ Fetch rank directly (for reliability)
+  const fetchRank = async (auctionId: string) => {
+    try {
+      const res = await fetch(`/api/auctions`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const auction = data.auctions.find((a: any) => a.id === auctionId);
+      if (auction && auction.bids) {
+        const myBid = auction.bids.find((b: any) => b.supplierId === supplierId);
+        if (myBid?.rank) {
+          setRank(myBid.rank);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching rank:", err);
+    }
+  };
+
   // ✅ Socket connection
   useEffect(() => {
     fetchAuctions();
@@ -63,18 +81,16 @@ export default function SupplierDashboard() {
 
     s.on("connect", () => console.log("✅ Socket connected"));
     s.on("auction-update", fetchAuctions);
-
     s.on("rank-update", (payload: any) => {
       if (
         payload.supplierId === supplierId &&
         selectedAuction?.id === payload.auctionId
       ) {
-        console.log("📈 Rank updated:", payload.rank);
+        console.log("📈 Rank update:", payload.rank);
         setRank(payload.rank);
       }
     });
 
-    // Clean up
     return () => {
       s.disconnect();
     };
@@ -104,7 +120,9 @@ export default function SupplierDashboard() {
       });
 
       if (res.ok) {
-        alert("✅ Bids submitted! Rank will update automatically.");
+        alert("✅ Bids submitted!");
+        // Fetch the updated rank directly after submitting
+        await fetchRank(selectedAuction.id);
       } else {
         alert("Failed to submit bids.");
       }
@@ -121,7 +139,7 @@ export default function SupplierDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white p-8">
-      {/* Header */}
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Supplier Dashboard</h1>
@@ -129,25 +147,15 @@ export default function SupplierDashboard() {
             Welcome, <span className="text-blue-400 font-semibold">{supplierName}</span>
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-gray-400">Your Rank</p>
-          <p
-            className={`text-3xl font-bold transition-all ${
-              rank === "L1" ? "text-green-400" : "text-blue-300"
-            }`}
-          >
-            {rank}
-          </p>
-          <button
-            onClick={logout}
-            className="mt-2 bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
-          >
-            Logout
-          </button>
-        </div>
+        <button
+          onClick={logout}
+          className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
+        >
+          Logout
+        </button>
       </div>
 
-      {/* Auctions */}
+      {/* BODY */}
       {!selectedAuction ? (
         <div className="grid md:grid-cols-2 gap-6">
           {auctions.length === 0 ? (
@@ -160,7 +168,8 @@ export default function SupplierDashboard() {
                 whileHover={{ scale: 1.03 }}
                 onClick={() => {
                   setSelectedAuction(a);
-                  setRank("--"); // reset rank when switching auctions
+                  setRank("--");
+                  fetchRank(a.id); // load initial rank
                 }}
               >
                 <h2 className="text-xl font-semibold mb-1">{a.title}</h2>
@@ -220,16 +229,18 @@ export default function SupplierDashboard() {
             </tbody>
           </table>
 
-          <div className="flex justify-end mt-4 gap-3">
-            <button
-              onClick={() => {
-                setSelectedAuction(null);
-                setRank("--");
-              }}
-              className="bg-gray-700 px-4 py-2 rounded-lg"
-            >
-              Cancel
-            </button>
+          {/* Rank display under the table */}
+          <div className="flex justify-between items-center mt-6">
+            <p className="text-lg">
+              <span className="text-gray-300">Your Current Rank:</span>{" "}
+              <span
+                className={`font-bold ${
+                  rank === "L1" ? "text-green-400" : "text-blue-300"
+                }`}
+              >
+                {rank}
+              </span>
+            </p>
 
             <button
               onClick={submitBids}
