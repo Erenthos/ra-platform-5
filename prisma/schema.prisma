@@ -74,11 +74,7 @@ model Bid {
   auctionItem   AuctionItem   @relation(fields: [auctionItemId], references: [id], onDelete: Cascade)
   bidValue      Float
   createdAt     DateTime      @default(now())
+
+  // ✅ Composite Unique Constraint (Fix for Render build)
+  @@unique([supplierId, auctionItemId])
 }
-
-// -----------------------------------------
-// VIEWS / FUTURE EXTENSIONS
-// -----------------------------------------
-// Optional: can later add an AuctionSummary or Notification model
-// for post-auction reports and alerts
-
