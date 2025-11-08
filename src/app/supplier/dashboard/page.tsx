@@ -56,13 +56,12 @@ export default function SupplierDashboard() {
 
   useEffect(() => {
     if (!supplierId) return;
-
     fetchAuctions();
+
     const s = ioClient();
     setSocket(s);
 
     s.on("connect", () => {
-      console.log("Socket connected:", s.id);
       s.emit("register-supplier", supplierId);
     });
 
@@ -71,7 +70,12 @@ export default function SupplierDashboard() {
     });
 
     s.on("rank-update", (payload: any) => {
-      if (payload?.auctionId && selectedAuction && payload.auctionId === selectedAuction.id) {
+      console.log("🏁 Rank update received:", payload);
+      if (
+        payload?.auctionId &&
+        selectedAuction &&
+        payload.auctionId === selectedAuction.id
+      ) {
         setRank(payload.rank);
       }
     });
@@ -119,13 +123,13 @@ export default function SupplierDashboard() {
 
       const data = await res.json();
       if (res.ok) {
-        alert("Bids submitted. Your rank will update shortly.");
+        alert("Bids submitted successfully! Your rank will update shortly.");
       } else {
         alert(data.error || "Failed to submit bids");
       }
     } catch (err) {
       console.error("Error submitting bids:", err);
-      alert("Something went wrong while submitting bids.");
+      alert("Something went wrong.");
     }
   };
 
@@ -140,7 +144,8 @@ export default function SupplierDashboard() {
         <h1 className="text-3xl font-bold">Supplier Dashboard</h1>
         <div className="text-right">
           <div className="text-gray-400 text-sm mb-1">
-            Welcome, <span className="text-blue-400 font-semibold">{supplierName}</span>
+            Welcome,{" "}
+            <span className="text-blue-400 font-semibold">{supplierName}</span>
           </div>
           <button
             onClick={logout}
@@ -154,19 +159,25 @@ export default function SupplierDashboard() {
       {!selectedAuction ? (
         <>
           {auctions.length === 0 ? (
-            <p className="text-center text-gray-400">No live auctions available right now.</p>
+            <p className="text-center text-gray-400">
+              No live auctions available right now.
+            </p>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {auctions.map((a) => (
                 <motion.div
                   key={a.id}
-                  className="bg-white/10 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-md transition cursor-pointer"
+                  className="bg-white/10 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-md cursor-pointer"
                   whileHover={{ scale: 1.03 }}
                   onClick={() => openAuction(a)}
                 >
                   <h2 className="text-xl font-semibold mb-2">{a.title}</h2>
-                  <p className="text-gray-400 text-sm mb-2">{a.description}</p>
-                  <p className="text-gray-300 text-sm">Items: {a.items.length}</p>
+                  <p className="text-gray-400 text-sm mb-2">
+                    {a.description || "No description"}
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    Items: {a.items.length}
+                  </p>
                   <p className="text-xs text-gray-500 mt-3">
                     Ends at: {new Date(a.endsAt).toLocaleString()}
                   </p>
