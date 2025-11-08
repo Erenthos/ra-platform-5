@@ -2,18 +2,46 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import io from "socket.io-client";
+import ioClient from "socket.io-client";
+
+type AuctionItem = {
+  id: string;
+  name: string;
+  quantity: number;
+  uom: string;
+};
+
+type SupplierBid = {
+  supplierId: string;
+  supplierName: string;
+  totalValue: number;
+  rank: string;
+};
+
+type Auction = {
+  id: string;
+  title: string;
+  description?: string;
+  isActive: boolean;
+  endsAt: string;
+  createdAt: string;
+  items: AuctionItem[];
+  bids?: SupplierBid[];
+};
 
 export default function BuyerDashboard() {
-  const [auctions, setAuctions] = useState<any[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState("");
-  const [bidDecrement, setBidDecrement] = useState("");
-  const [items, setItems] = useState([{ name: "", quantity: "", uom: "" }]);
+  const [auctions, setAuctions] = useState<Auction[]>([]);
+  const [socket, setSocket] = useState<any>(null);
+  const [buyer, setBuyer] = useState<any>(null);
 
-  // 🧠 Fetch all active auctions
+  useEffect(() => {
+    const buyerData = JSON.parse(localStorage.getItem("buyer") || "null");
+    if (!buyerData) {
+      alert("Please log in again.");
+      window.location.href = "/buyer/login";
+    } else setBuyer(buyerData);
+  }, []);
+
   const fetchAuctions = async () => {
     try {
       const res = await fetch("/api/auctions");
@@ -26,220 +54,166 @@ export default function BuyerDashboard() {
     }
   };
 
-  // 🧠 Create auction handler
-  const handleCreateAuction = async () => {
-    try {
-      const buyer = JSON.parse(localStorage.getItem("buyer") || "{}");
-      if (!buyer?.id) {
-        alert("Buyer info missing. Please log in again.");
-        return;
-      }
-
-      const res = await fetch("/api/auctions/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          buyerId: buyer.id,
-          title,
-          description,
-          durationMinutes,
-          bidDecrement,
-          items,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        alert("Auction created successfully!");
-        setIsModalOpen(false);
-        fetchAuctions();
-      } else {
-        alert(data.error || "Failed to create auction");
-      }
-    } catch (err) {
-      console.error("Error creating auction:", err);
-      alert("Something went wrong.");
-    }
-  };
-
-  // 🧠 Add new item input row
-  const handleAddItem = () => {
-    setItems([...items, { name: "", quantity: "", uom: "" }]);
-  };
-
-  // 🧠 Realtime updates
   useEffect(() => {
     fetchAuctions();
+    const s = ioClient();
+    setSocket(s);
 
-    const socket = io();
-    socket.on("auction-update", () => {
-      console.log("🔄 Auction update received — refreshing list");
-      fetchAuctions();
-    });
+    s.on("connect", () => console.log("Socket connected"));
+    s.on("auction-update", fetchAuctions);
+    s.on("rank-update", fetchAuctions);
+    s.on("auction-closed", fetchAuctions);
 
     return () => {
-      socket.disconnect();
+      s.disconnect();
     };
   }, []);
 
+  const handleCloseAuction = async (auctionId: string) => {
+    if (!confirm("Are you sure you want to close this auction?")) return;
+    try {
+      const res = await fetch("/api/auctions/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auctionId }),
+      });
+      if (res.ok) {
+        alert("Auction closed successfully!");
+        fetchAuctions();
+      } else {
+        alert("Failed to close auction.");
+      }
+    } catch (err) {
+      console.error("Error closing auction:", err);
+    }
+  };
+
+  const handleDownloadSummary = async (auctionId: string) => {
+    try {
+      const res = await fetch("/api/auctions/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auctionId }),
+      });
+
+      if (!res.ok) throw new Error("Download failed");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Auction_Summary_${auctionId}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      console.error("Download error:", err);
+      alert("Failed to download summary");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white p-8">
-      <h1 className="text-3xl font-bold mb-6 text-center">
-        Buyer Dashboard
-      </h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Buyer Dashboard</h1>
+        <button
+          onClick={() => {
+            localStorage.removeItem("buyer");
+            window.location.href = "/buyer/login";
+          }}
+          className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
+        >
+          Logout
+        </button>
+      </div>
 
-      <button
-        onClick={() => setIsModalOpen(true)}
-        className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg mb-6 transition font-semibold"
-      >
-        Create New Auction
-      </button>
+      <div className="text-right mb-6">
+        <a
+          href="#"
+          onClick={() => (window.location.href = "/buyer/new-auction")}
+          className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-white"
+        >
+          + Create New Auction
+        </a>
+      </div>
 
-      {/* 🔹 Auction List */}
       {auctions.length === 0 ? (
-        <p className="text-center text-gray-400">
-          No live auctions yet. Create your first one!
-        </p>
+        <p className="text-center text-gray-400">No auctions found.</p>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {auctions.map((auction) => (
+        <div className="grid lg:grid-cols-2 gap-6">
+          {auctions.map((a) => (
             <motion.div
-              key={auction.id}
-              className="bg-white/10 backdrop-blur-xl p-6 rounded-xl border border-white/10 shadow-md"
+              key={a.id}
+              className={`p-6 rounded-xl backdrop-blur-xl border shadow-md ${
+                a.isActive
+                  ? "bg-green-900/40 border-green-500/30"
+                  : "bg-gray-800/40 border-gray-600/30"
+              }`}
               whileHover={{ scale: 1.02 }}
             >
-              <h2 className="text-xl font-semibold mb-2">{auction.title}</h2>
+              <h2 className="text-xl font-semibold mb-2">{a.title}</h2>
               <p className="text-gray-400 text-sm mb-2">
-                Duration: {auction.durationMinutes} mins
+                {a.description || "No description"}
               </p>
-              <p className="text-gray-400 text-sm mb-2">
-                Bid Decrement: ₹{auction.bidDecrement}
+              <p className="text-sm">
+                Status:{" "}
+                <span
+                  className={`font-bold ${
+                    a.isActive ? "text-green-400" : "text-red-400"
+                  }`}
+                >
+                  {a.isActive ? "Live" : "Closed"}
+                </span>
               </p>
-              <p className="text-gray-300 text-sm mb-2">
-                {auction.description || "No description provided."}
+              <p className="text-xs text-gray-500 mt-2">
+                Ends at: {new Date(a.endsAt).toLocaleString()}
               </p>
 
-              <p className="text-xs text-gray-500 mt-3">
-                Created on:{" "}
-                {new Date(auction.createdAt).toLocaleString("en-IN", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </p>
+              {a.bids && a.bids.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold mb-2 text-gray-300">
+                    Supplier Rankings
+                  </h3>
+                  <table className="w-full text-sm border border-white/10 rounded">
+                    <thead className="bg-white/10">
+                      <tr>
+                        <th className="p-2 text-left">Rank</th>
+                        <th className="p-2 text-left">Supplier</th>
+                        <th className="p-2 text-right">Total (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {a.bids.map((b) => (
+                        <tr key={b.supplierId} className="border-t border-white/10">
+                          <td className="p-2">{b.rank}</td>
+                          <td className="p-2">{b.supplierName}</td>
+                          <td className="p-2 text-right">{b.totalValue}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 mt-4">
+                {a.isActive ? (
+                  <button
+                    onClick={() => handleCloseAuction(a.id)}
+                    className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg"
+                  >
+                    Close Auction
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleDownloadSummary(a.id)}
+                    className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded-lg"
+                  >
+                    Download Summary
+                  </button>
+                )}
+              </div>
             </motion.div>
           ))}
-        </div>
-      )}
-
-      {/* 🔹 Create Auction Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-white/10 backdrop-blur-xl border border-white/10 p-8 rounded-xl w-full max-w-2xl shadow-2xl">
-            <h2 className="text-2xl font-bold mb-4">Create New Auction</h2>
-
-            <div className="mb-3">
-              <label className="block mb-1 text-sm">Title</label>
-              <input
-                type="text"
-                className="w-full p-2 rounded bg-gray-800 border border-gray-700 text-white"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-
-            <div className="mb-3">
-              <label className="block mb-1 text-sm">Description</label>
-              <textarea
-                className="w-full p-2 rounded bg-gray-800 border border-gray-700 text-white"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="block mb-1 text-sm">Duration (mins)</label>
-                <input
-                  type="number"
-                  className="w-full p-2 rounded bg-gray-800 border border-gray-700 text-white"
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block mb-1 text-sm">Bid Decrement ₹</label>
-                <input
-                  type="number"
-                  className="w-full p-2 rounded bg-gray-800 border border-gray-700 text-white"
-                  value={bidDecrement}
-                  onChange={(e) => setBidDecrement(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <h3 className="text-lg font-semibold mt-4 mb-2">Auction Items</h3>
-
-            {items.map((item, index) => (
-              <div key={index} className="grid grid-cols-3 gap-3 mb-2">
-                <input
-                  type="text"
-                  placeholder="Name"
-                  className="p-2 rounded bg-gray-800 border border-gray-700 text-white"
-                  value={item.name}
-                  onChange={(e) => {
-                    const newItems = [...items];
-                    newItems[index].name = e.target.value;
-                    setItems(newItems);
-                  }}
-                />
-                <input
-                  type="number"
-                  placeholder="Qty"
-                  className="p-2 rounded bg-gray-800 border border-gray-700 text-white"
-                  value={item.quantity}
-                  onChange={(e) => {
-                    const newItems = [...items];
-                    newItems[index].quantity = e.target.value;
-                    setItems(newItems);
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="UOM"
-                  className="p-2 rounded bg-gray-800 border border-gray-700 text-white"
-                  value={item.uom}
-                  onChange={(e) => {
-                    const newItems = [...items];
-                    newItems[index].uom = e.target.value;
-                    setItems(newItems);
-                  }}
-                />
-              </div>
-            ))}
-
-            <button
-              onClick={handleAddItem}
-              className="text-blue-400 text-sm mt-2 mb-4 hover:underline"
-            >
-              + Add another item
-            </button>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateAuction}
-                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
-              >
-                Create
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
