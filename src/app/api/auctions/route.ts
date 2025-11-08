@@ -3,6 +3,14 @@ import prisma from "@/lib/prisma";
 
 export async function GET() {
   try {
+    const now = new Date();
+
+    // Auto-close expired auctions
+    await prisma.auction.updateMany({
+      where: { endsAt: { lt: now }, isActive: true },
+      data: { isActive: false },
+    });
+
     const auctions = await prisma.auction.findMany({
       where: { isActive: true },
       include: { items: true },
