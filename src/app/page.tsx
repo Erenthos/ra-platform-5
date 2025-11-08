@@ -93,7 +93,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="text-center text-gray-400 text-sm py-6 border-t border-white/10 bg-black/30">
-        © {new Date().getFullYear()} Reverse Auction Platform · Built with ❤️ by your team
+        © {new Date().getFullYear()} Reverse Auction Platform · Built with ❤️ by Shubham and team
       </footer>
     </div>
   );
