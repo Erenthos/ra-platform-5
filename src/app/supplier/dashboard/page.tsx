@@ -29,7 +29,7 @@ export default function SupplierDashboard() {
   const [supplierId, setSupplierId] = useState<string | null>(null);
   const [supplierName, setSupplierName] = useState<string>("");
 
-  // ✅ Load supplier info from localStorage
+  // ✅ Load supplier info
   useEffect(() => {
     const supplier = JSON.parse(localStorage.getItem("supplier") || "null");
     if (!supplier?.id) {
@@ -41,16 +41,13 @@ export default function SupplierDashboard() {
     }
   }, []);
 
-  // ✅ Fetch all auctions (we’ll filter active ones)
+  // ✅ Fetch all live auctions
   const fetchAuctions = async () => {
     try {
       const res = await fetch("/api/auctions");
       if (res.ok) {
         const data = await res.json();
-        // Only show live auctions to suppliers
-        const activeOnly = (data.auctions || []).filter(
-          (a: Auction) => a.isActive
-        );
+        const activeOnly = (data.auctions || []).filter((a: Auction) => a.isActive);
         setAuctions(activeOnly);
       }
     } catch (err) {
@@ -58,13 +55,13 @@ export default function SupplierDashboard() {
     }
   };
 
-  // ✅ Setup socket for live updates
+  // ✅ Socket connection
   useEffect(() => {
     fetchAuctions();
     const s = ioClient();
     setSocket(s);
 
-    s.on("connect", () => console.log("Socket connected to server"));
+    s.on("connect", () => console.log("✅ Socket connected"));
     s.on("auction-update", fetchAuctions);
 
     s.on("rank-update", (payload: any) => {
@@ -72,17 +69,18 @@ export default function SupplierDashboard() {
         payload.supplierId === supplierId &&
         selectedAuction?.id === payload.auctionId
       ) {
+        console.log("📈 Rank updated:", payload.rank);
         setRank(payload.rank);
       }
     });
 
-    // ✅ Proper cleanup
+    // Clean up
     return () => {
       s.disconnect();
     };
   }, [supplierId, selectedAuction?.id]);
 
-  // ✅ Submit bid handler
+  // ✅ Submit bids
   const submitBids = async () => {
     if (!selectedAuction || !supplierId) {
       alert("Please select auction first.");
@@ -105,11 +103,10 @@ export default function SupplierDashboard() {
         }),
       });
 
-      const data = await res.json();
       if (res.ok) {
         alert("✅ Bids submitted! Rank will update automatically.");
       } else {
-        alert(data.error || "Failed to submit bids");
+        alert("Failed to submit bids.");
       }
     } catch (err) {
       console.error(err);
@@ -117,7 +114,6 @@ export default function SupplierDashboard() {
     }
   };
 
-  // ✅ Logout
   const logout = () => {
     localStorage.removeItem("supplier");
     window.location.href = "/supplier/login";
@@ -125,19 +121,18 @@ export default function SupplierDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white p-8">
-      {/* HEADER */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Supplier Dashboard</h1>
           <p className="text-gray-400 text-sm">
-            Welcome,{" "}
-            <span className="text-blue-400 font-semibold">{supplierName}</span>
+            Welcome, <span className="text-blue-400 font-semibold">{supplierName}</span>
           </p>
         </div>
         <div className="text-right">
           <p className="text-sm text-gray-400">Your Rank</p>
           <p
-            className={`text-3xl font-bold ${
+            className={`text-3xl font-bold transition-all ${
               rank === "L1" ? "text-green-400" : "text-blue-300"
             }`}
           >
@@ -152,20 +147,21 @@ export default function SupplierDashboard() {
         </div>
       </div>
 
-      {/* BODY */}
+      {/* Auctions */}
       {!selectedAuction ? (
         <div className="grid md:grid-cols-2 gap-6">
           {auctions.length === 0 ? (
-            <p className="text-gray-400">
-              No live auctions available at the moment.
-            </p>
+            <p className="text-gray-400">No live auctions available.</p>
           ) : (
             auctions.map((a) => (
               <motion.div
                 key={a.id}
                 className="bg-white/10 p-6 rounded-xl cursor-pointer border border-white/10 hover:border-blue-400/40"
                 whileHover={{ scale: 1.03 }}
-                onClick={() => setSelectedAuction(a)}
+                onClick={() => {
+                  setSelectedAuction(a);
+                  setRank("--"); // reset rank when switching auctions
+                }}
               >
                 <h2 className="text-xl font-semibold mb-1">{a.title}</h2>
                 <p className="text-gray-400 text-sm">{a.description}</p>
