@@ -1,1 +1,84 @@
+// -----------------------------------------
+// Prisma Schema for Reverse Auction Platform
+// -----------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------
+// MODELS
+// -----------------------------------------
+
+model Buyer {
+  id          String     @id @default(cuid())
+  name        String
+  email       String     @unique
+  password    String
+  companyName String?
+  auctions    Auction[]
+  createdAt   DateTime   @default(now())
+}
+
+model Supplier {
+  id          String     @id @default(cuid())
+  name        String
+  email       String     @unique
+  password    String
+  companyName String?
+  bids        Bid[]
+  createdAt   DateTime   @default(now())
+}
+
+model Auction {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  buyerId         String
+  buyer           Buyer          @relation(fields: [buyerId], references: [id])
+  items           AuctionItem[]
+  bids            Bid[]
+  bidDecrement    Float          @default(0.0)
+  durationMinutes Int
+  isActive        Boolean        @default(true)
+  startedAt       DateTime       @default(now())
+  endsAt          DateTime
+  closedManually  Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+}
+
+model AuctionItem {
+  id          String    @id @default(cuid())
+  auctionId   String
+  auction     Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  quantity    Float
+  uom         String
+  createdAt   DateTime  @default(now())
+  bids        Bid[]
+}
+
+model Bid {
+  id            String       @id @default(cuid())
+  supplierId    String
+  supplier      Supplier      @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  auctionId     String
+  auction       Auction       @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  auctionItemId String
+  auctionItem   AuctionItem   @relation(fields: [auctionItemId], references: [id], onDelete: Cascade)
+  bidValue      Float
+  createdAt     DateTime      @default(now())
+}
+
+// -----------------------------------------
+// VIEWS / FUTURE EXTENSIONS
+// -----------------------------------------
+// Optional: can later add an AuctionSummary or Notification model
+// for post-auction reports and alerts
 
