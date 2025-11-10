@@ -2,17 +2,25 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import ExcelJS from "exceljs";
 
-export async function POST(req: Request) {
+export async function GET(req: Request) {
   try {
-    const { auctionId } = await req.json();
-    if (!auctionId)
-      return NextResponse.json({ error: "auctionId required" }, { status: 400 });
+    const { searchParams } = new URL(req.url);
+    const auctionId = searchParams.get("auctionId");
 
+    if (!auctionId) {
+      return NextResponse.json({ error: "Missing auctionId" }, { status: 400 });
+    }
+
+    // Fetch auction details with bids, suppliers, and items
     const auction = await prisma.auction.findUnique({
       where: { id: auctionId },
       include: {
-        items: true,
-        bids: { include: { supplier: true } },
+        bids: {
+          include: {
+            supplier: true, // 👈 ensures supplier details (name, email, company)
+            auctionItem: true,
+          },
+        },
       },
     });
 
@@ -20,47 +28,72 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Auction not found" }, { status: 404 });
     }
 
+    // Create a new workbook
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Auction Summary");
 
+    // Header info
     sheet.addRow(["AUCTION SUMMARY REPORT"]);
     sheet.addRow([]);
     sheet.addRow(["Title", auction.title]);
-    sheet.addRow(["Description", auction.description]);
-    sheet.addRow(["Ends At", auction.endsAt.toLocaleString()]);
+    sheet.addRow(["Description", auction.description || ""]);
+    sheet.addRow(["Ends At", new Date(auction.endsAt).toLocaleString()]);
     sheet.addRow([]);
     sheet.addRow([
       "Supplier ID",
       "Supplier Name",
+      "Company Name",
+      "Email",
       "Item Name",
       "Qty",
       "UOM",
       "Bid Value (₹)",
     ]);
 
-    for (const bid of auction.bids) {
-      const item = auction.items.find((it) => it.id === bid.auctionItemId);
-      if (!item) continue;
+    // Add bid data
+    auction.bids.forEach((b) => {
       sheet.addRow([
-        bid.supplierId,
-        bid.supplier?.name || "",
-        item.name,
-        item.quantity,
-        item.uom,
-        bid.bidValue,
+        b.supplierId,
+        b.supplier?.name || "",
+        b.supplier?.companyName || "-", // 👈 added company name
+        b.supplier?.email || "-",       // 👈 added email
+        b.auctionItem?.name || "",
+        b.auctionItem?.quantity || "",
+        b.auctionItem?.uom || "",
+        b.bidValue || "",
       ]);
-    }
+    });
 
+    // Style header row
+    sheet.getRow(7).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF2563EB" }, // blue header background
+      };
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+    });
+
+    sheet.columns.forEach((col) => {
+      col.width = 20;
+    });
+
+    // Buffer output
     const buffer = await workbook.xlsx.writeBuffer();
+
     return new NextResponse(buffer, {
       headers: {
-        "Content-Disposition": `attachment; filename=Auction_${auction.title}_Summary.xlsx`,
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="Auction_Summary_${auction.title}.xlsx"`,
       },
     });
   } catch (err) {
-    console.error("❌ Error generating summary:", err);
-    return NextResponse.json({ error: "Failed to generate summary" }, { status: 500 });
+    console.error("❌ summary error:", err);
+    return NextResponse.json(
+      { error: "Failed to generate summary" },
+      { status: 500 }
+    );
   }
 }
