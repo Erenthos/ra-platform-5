@@ -11,13 +11,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing auctionId" }, { status: 400 });
     }
 
-    // Fetch auction details safely
+    // ✅ Fetch auction with all bids and supplier email
     const auction = await prisma.auction.findUnique({
       where: { id: auctionId },
       include: {
         bids: {
           include: {
-            supplier: true,
+            supplier: true, // include supplier to get name & email
             auctionItem: true,
           },
         },
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Auction not found" }, { status: 404 });
     }
 
-    // ✅ Create workbook
+    // ✅ Create Excel workbook
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Auction Summary");
 
@@ -39,34 +39,32 @@ export async function GET(req: Request) {
     sheet.addRow(["Description", auction.description || ""]);
     sheet.addRow(["Ends At", new Date(auction.endsAt).toLocaleString()]);
     sheet.addRow([]);
+
+    // ✅ Define header row
     sheet.addRow([
       "Supplier ID",
       "Supplier Name",
-      "Company Name",
-      "Email",
+      "Supplier Email",
       "Item Name",
       "Qty",
       "UOM",
       "Bid Value (₹)",
     ]);
 
-    // ✅ Add rows safely
-    for (const b of auction.bids) {
-      const supplier: any = b.supplier || {};
-
+    // ✅ Add bid data
+    auction.bids.forEach((b) => {
       sheet.addRow([
-        b.supplierId || "",
-        supplier.name || "",
-        supplier.companyName || "-", // if not exists, safely fill "-"
-        supplier.email || "-",
+        b.supplierId,
+        b.supplier?.name || "",
+        b.supplier?.email || "-", // 👈 include only email
         b.auctionItem?.name || "",
         b.auctionItem?.quantity || "",
         b.auctionItem?.uom || "",
         b.bidValue || "",
       ]);
-    }
+    });
 
-    // Header styling
+    // ✅ Style header row
     const headerRow = sheet.getRow(7);
     headerRow.eachCell((cell) => {
       cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -78,9 +76,10 @@ export async function GET(req: Request) {
       cell.alignment = { vertical: "middle", horizontal: "center" };
     });
 
-    sheet.columns.forEach((col) => (col.width = 20));
+    // Auto-width
+    sheet.columns.forEach((col) => (col.width = 22));
 
-    // Generate buffer
+    // ✅ Create downloadable Excel file buffer
     const buffer = await workbook.xlsx.writeBuffer();
 
     return new NextResponse(buffer, {
@@ -91,7 +90,7 @@ export async function GET(req: Request) {
       },
     });
   } catch (err: any) {
-    console.error("❌ summary generation error:", err);
+    console.error("❌ Auction summary generation error:", err);
     return NextResponse.json(
       { error: "Failed to generate summary", details: err.message },
       { status: 500 }
