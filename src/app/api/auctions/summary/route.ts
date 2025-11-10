@@ -11,13 +11,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Missing auctionId" }, { status: 400 });
     }
 
-    // Fetch auction details with bids, suppliers, and items
+    // Fetch auction details safely
     const auction = await prisma.auction.findUnique({
       where: { id: auctionId },
       include: {
         bids: {
           include: {
-            supplier: true, // 👈 ensures supplier details (name, email, company)
+            supplier: true,
             auctionItem: true,
           },
         },
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Auction not found" }, { status: 404 });
     }
 
-    // Create a new workbook
+    // ✅ Create workbook
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Auction Summary");
 
@@ -50,36 +50,37 @@ export async function GET(req: Request) {
       "Bid Value (₹)",
     ]);
 
-    // Add bid data
-    auction.bids.forEach((b) => {
+    // ✅ Add rows safely
+    for (const b of auction.bids) {
+      const supplier: any = b.supplier || {};
+
       sheet.addRow([
-        b.supplierId,
-        b.supplier?.name || "",
-        b.supplier?.companyName || "-", // 👈 added company name
-        b.supplier?.email || "-",       // 👈 added email
+        b.supplierId || "",
+        supplier.name || "",
+        supplier.companyName || "-", // if not exists, safely fill "-"
+        supplier.email || "-",
         b.auctionItem?.name || "",
         b.auctionItem?.quantity || "",
         b.auctionItem?.uom || "",
         b.bidValue || "",
       ]);
-    });
+    }
 
-    // Style header row
-    sheet.getRow(7).eachCell((cell) => {
+    // Header styling
+    const headerRow = sheet.getRow(7);
+    headerRow.eachCell((cell) => {
       cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
       cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "FF2563EB" }, // blue header background
+        fgColor: { argb: "FF2563EB" },
       };
       cell.alignment = { vertical: "middle", horizontal: "center" };
     });
 
-    sheet.columns.forEach((col) => {
-      col.width = 20;
-    });
+    sheet.columns.forEach((col) => (col.width = 20));
 
-    // Buffer output
+    // Generate buffer
     const buffer = await workbook.xlsx.writeBuffer();
 
     return new NextResponse(buffer, {
@@ -89,10 +90,10 @@ export async function GET(req: Request) {
         "Content-Disposition": `attachment; filename="Auction_Summary_${auction.title}.xlsx"`,
       },
     });
-  } catch (err) {
-    console.error("❌ summary error:", err);
+  } catch (err: any) {
+    console.error("❌ summary generation error:", err);
     return NextResponse.json(
-      { error: "Failed to generate summary" },
+      { error: "Failed to generate summary", details: err.message },
       { status: 500 }
     );
   }
