@@ -37,10 +37,10 @@ export default function HomePage() {
           className="max-w-4xl"
         >
           <h2 className="text-5xl md:text-6xl font-extrabold leading-tight mb-6 bg-gradient-to-r from-blue-400 to-violet-500 bg-clip-text text-transparent">
-            Experience the Future of Bidding
+            Experience the Future of Bidding with Avaada
           </h2>
           <p className="text-gray-300 text-lg md:text-xl mb-10">
-            A next-generation <span className="text-blue-400 font-semibold">Reverse Auction Platform</span>  
+            A next-generation <span className="text-blue-400 font-semibold"> Reverse Auction Platform </span>  
             empowering buyers and suppliers with real-time bidding, live ranking,  
             and total transparency — all in one beautiful interface.
           </p>
